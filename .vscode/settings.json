@@ -1,0 +1,18 @@
+{
+    "java.project.sourcePaths": ["src"],
+    "java.project.outputPath": "bin",
+    "java.project.referencedLibraries": {
+        "include": [
+            "lib/**/*.jar",
+            "/home/hagimont/shared/code/bcel/asm-master/asm/build/libs/asm-9.8-SNAPSHOT.jar",
+            "/home/hagimont/shared/code/bcel/asm-master/asm-analysis/build/libs/asm-analysis-9.8-SNAPSHOT.jar",
+            "/home/hagimont/shared/code/bcel/asm-master/asm-commons/build/libs/asm-commons-9.8-SNAPSHOT.jar",
+            "/home/hagimont/shared/code/bcel/asm-master/asm-tree/build/libs/asm-tree-9.8-SNAPSHOT.jar",
+            "/home/hagimont/shared/code/bcel/asm-master/asm-util/build/libs/asm-util-9.8-SNAPSHOT.jar"
+        ],
+        "exclude": [
+            "/home/hagimont/shared/code/bcel/asm-master/gradle/asm/build/libs/asm-9.8-SNAPSHOT.jar",
+            "/home/hagimont/shared/code/bcel/asm-master/gradle/asm-analysis/build/libs/asm-analysis-9.8-SNAPSHOT.jar"
+        ]
+    }
+}
