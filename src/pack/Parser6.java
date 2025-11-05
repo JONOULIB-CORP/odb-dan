@@ -512,15 +512,16 @@ if (op == Opcodes.CHECKCAST && inst1.desc.equals("[B")) {
                 System.out.println("instruction INVOKE ["+methowner+"."+methname+"]");
                 String newdesc = parseMethodDesc(methname, methdesc, true);
                 // translate types in method signatures only within the application
-                if ((methowner.startsWith("app/"))) { // removed :  || (methowner.startsWith("odb/"))
+                if ((methowner.startsWith("app/"))) {
                     methodinst.desc = newdesc;
                     outside = false;
                 } else {
-                    // translate the owner class if this class is overhidden (e.g. Socket or OutputStream)
-                    // for instance OutputStream becomes MyOutputStream as owner
-                    // and [B becomes Pair as a parameter
                     String newowner = classTranslation.get(methowner);
                     if (newowner != null) {
+                        // The owner class is one we have wrapped (e.g., ServletOutputStream).
+                        // We retarget the method call to our wrapper class (e.g., MyServletOutputStream).
+                        // The method signature has already been parsed by parseMethodDesc to use
+                        // our ODB types (e.g., Pair instead of byte[]).
                         methodinst.owner = newowner;
                         methodinst.desc = newdesc;
                         outside = false;
