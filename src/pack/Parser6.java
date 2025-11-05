@@ -163,6 +163,9 @@ static void parseInstructions(MethodNode m) {
         m.maxLocals += 1;
         m.maxStack += 4;  // Increase maxStack for wrapper construction
 
+        // Get the first instruction of the original method
+        AbstractInsnNode originalFirstInsn = instructions.getFirst();
+
         // Insert wrapper code at the beginning FIRST
         InsnList insert = new InsnList();
         
@@ -180,16 +183,10 @@ static void parseInstructions(MethodNode m) {
         insert.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "odb/MyHttpServletResponse", "<init>", "(Ljakarta/servlet/http/HttpServletResponse;)V", false));
         insert.add(new VarInsnNode(Opcodes.ASTORE, myRespIndex));
 
-        instructions.insertBefore(instructions.getFirst(), insert);
+        instructions.insertBefore(originalFirstInsn, insert);
 
-        // NOW replace all ALOAD 1 with ALOAD myReqIndex, ALOAD 2 with ALOAD myRespIndex
-        // We only do this after the wrapper creation, up to the first instruction of the original method body
-        AbstractInsnNode insn = instructions.getFirst();
-        // Skip wrapper creation code we just added
-        while (insn != null && !(insn instanceof LabelNode)) {
-             insn = insn.getNext();
-        }
-
+        // NOW replace all ALOAD 1 and ALOAD 2 in the *original* method body
+        AbstractInsnNode insn = originalFirstInsn;
         while (insn != null) {
             if (insn instanceof VarInsnNode) {
                 VarInsnNode varInsn = (VarInsnNode) insn;
@@ -819,8 +816,13 @@ static AbstractInsnNode wrapServletStream(MethodNode m, AbstractInsnNode inst,
 
 
             ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
-            cn.accept(cw);
+            org.objectweb.asm.util.CheckClassAdapter ca = new org.objectweb.asm.util.CheckClassAdapter(cw);
+            cn.accept(ca);
             byte[] b = cw.toByteArray();
+
+            // Optional: To see the verification errors right away
+            // java.io.PrintWriter pw = new java.io.PrintWriter(System.out);
+            // org.objectweb.asm.util.CheckClassAdapter.verify(new ClassReader(b), true, pw);
 
             File outputFile = new File("out/"+cn.name+".class");
             if (outputFile.exists()) outputFile.delete();
