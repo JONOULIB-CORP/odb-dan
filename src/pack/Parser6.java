@@ -128,20 +128,24 @@ static void parseLocalVariables(MethodNode m) {
     List<LocalVariableNode> list = m.localVariables;
     List<LocalVariableNode> newlist = new ArrayList<LocalVariableNode>();
     for (LocalVariableNode lv : list) {
-        // For doGet/doPost, we must NOT translate the original request/response parameters,
-        // as they are handled by creating wrappers. Their corresponding ALOADs are replaced,
-        // so we can leave their entries in the local variable table untouched.
-        if ((m.name.equals("doGet") || m.name.equals("doPost")) &&
-            (lv.name.equals("request") || lv.name.equals("response"))) {
-            newlist.add(lv);
-            continue;
-        }
         String desttype = typeTranslation.get(lv.desc);
         if (desttype != null) {
             System.out.println("METHOD ("+m.name+"): local var name: "+lv.name+" index: "+lv.index+" size: "+Type.getType(lv.desc).getSize());
             newlist.add(new LocalVariableNode(lv.name, desttype, null, lv.start, lv.end, lv.index));
-        } else
-            newlist.add(lv);
+        } else {
+            // For doGet/doPost, update the type of the original request and response variables
+            if ((m.name.equals("doGet") || m.name.equals("doPost"))) {
+                if (lv.index == 1) { // request
+                    newlist.add(new LocalVariableNode(lv.name, "Lodb/MyHttpServletRequest;", null, lv.start, lv.end, lv.index));
+                    continue;
+                }
+                if (lv.index == 2) { // response
+                    newlist.add(new LocalVariableNode(lv.name, "Lodb/MyHttpServletResponse;", null, lv.start, lv.end, lv.index));
+                    continue;
+                }
+            }
+             newlist.add(lv);
+        }
     }
     m.localVariables = newlist;
 }
@@ -157,12 +161,7 @@ static void parseInstructions(MethodNode m) {
     
     // If method is doGet or doPost, insert wrappers and replace var loads
     if (m.name.equals("doGet") || m.name.equals("doPost")) {
-        // Allocate new locals for myReq and myResp
-        int myReqIndex = m.maxLocals;
-        m.maxLocals += 1;
-        int myRespIndex = m.maxLocals;
-        m.maxLocals += 1;
-        m.maxStack += 4;  // Increase maxStack for wrapper construction
+        m.maxStack += 4; // Increase maxStack for wrapper construction
 
         // Get the first instruction of the original method
         AbstractInsnNode originalFirstInsn = instructions.getFirst();
@@ -175,72 +174,18 @@ static void parseInstructions(MethodNode m) {
         insert.add(new InsnNode(Opcodes.DUP));
         insert.add(new VarInsnNode(Opcodes.ALOAD, 1)); // load original request
         insert.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "odb/MyHttpServletRequest", "<init>", "(Ljakarta/servlet/http/HttpServletRequest;)V", false));
-        insert.add(new VarInsnNode(Opcodes.ASTORE, myReqIndex));
+        // Overwrite the original 'request' variable in slot 1
+        insert.add(new VarInsnNode(Opcodes.ASTORE, 1));
 
         // new MyHttpServletResponse(response)
         insert.add(new TypeInsnNode(Opcodes.NEW, "odb/MyHttpServletResponse"));
         insert.add(new InsnNode(Opcodes.DUP));
         insert.add(new VarInsnNode(Opcodes.ALOAD, 2)); // load original response
         insert.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "odb/MyHttpServletResponse", "<init>", "(Ljakarta/servlet/http/HttpServletResponse;)V", false));
-        insert.add(new VarInsnNode(Opcodes.ASTORE, myRespIndex));
+        // Overwrite the original 'response' variable in slot 2
+        insert.add(new VarInsnNode(Opcodes.ASTORE, 2));
 
         instructions.insertBefore(originalFirstInsn, insert);
-
-        // NOW replace all ALOAD 1 and ALOAD 2 in the *original* method body
-        AbstractInsnNode insn = originalFirstInsn;
-        while (insn != null) {
-            if (insn instanceof VarInsnNode) {
-                VarInsnNode varInsn = (VarInsnNode) insn;
-                if (varInsn.getOpcode() == Opcodes.ALOAD) {
-                    if (varInsn.var == 1) {
-                        instructions.set(insn, new VarInsnNode(Opcodes.ALOAD, myReqIndex));
-                    } else if (varInsn.var == 2) {
-                        instructions.set(insn, new VarInsnNode(Opcodes.ALOAD, myRespIndex));
-                    }
-                }
-            }
-            insn = insn.getNext();
-        }
-
-        // Update local variable table if present
-        if (m.localVariables != null) {
-            // Find start and end labels
-            LabelNode start = null;
-            LabelNode end = null;
-            
-            // Find first label
-            AbstractInsnNode first = instructions.getFirst();
-            while (first != null) {
-                if (first instanceof LabelNode) {
-                    start = (LabelNode)first;
-                    break;
-                }
-                first = first.getNext();
-            }
-            
-            // Find last label
-            AbstractInsnNode last = instructions.getLast();
-            while (last != null) {
-                if (last instanceof LabelNode) {
-                    end = (LabelNode)last;
-                    break;
-                }
-                last = last.getPrevious();
-            }
-            
-            // Create labels if not found
-            if (start == null) {
-                start = new LabelNode();
-                instructions.insert(instructions.getFirst(), start);
-            }
-            if (end == null) {
-                end = new LabelNode();
-                instructions.add(end);
-            }
-            
-            m.localVariables.add(new LocalVariableNode("wrappedRequest", "Lodb/MyHttpServletRequest;", null, start, end, myReqIndex));
-            m.localVariables.add(new LocalVariableNode("wrappedResponse", "Lodb/MyHttpServletResponse;", null, start, end, myRespIndex));
-        }
     }
 
     AbstractInsnNode firstinst = instructions.getFirst();
