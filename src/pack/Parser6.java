@@ -121,13 +121,20 @@ static String parseMethodDesc(String name, String desc, boolean trace) {
     /// rely on the typeTranslation table above
     
 static void parseLocalVariables(MethodNode m) {
-    if (m.name.equals("doGet") || m.name.equals("doPost")) {
-        System.out.println("METHOD ("+m.name+"): skipping local variable translation for servlet method");
-        return;  // NE PAS transformer les variables locales
+    if (m.localVariables == null) {
+        return;
     }
     List<LocalVariableNode> list = m.localVariables;
     List<LocalVariableNode> newlist = new ArrayList<LocalVariableNode>();
     for (LocalVariableNode lv : list) {
+        // For doGet/doPost, we must NOT translate the original request/response parameters,
+        // as they are handled by creating wrappers. Their corresponding ALOADs are replaced,
+        // so we can leave their entries in the local variable table untouched.
+        if ((m.name.equals("doGet") || m.name.equals("doPost")) &&
+            (lv.name.equals("request") || lv.name.equals("response"))) {
+            newlist.add(lv);
+            continue;
+        }
         String desttype = typeTranslation.get(lv.desc);
         if (desttype != null) {
             System.out.println("METHOD ("+m.name+"): local var name: "+lv.name+" index: "+lv.index+" size: "+Type.getType(lv.desc).getSize());
@@ -176,15 +183,21 @@ static void parseInstructions(MethodNode m) {
         instructions.insertBefore(instructions.getFirst(), insert);
 
         // NOW replace all ALOAD 1 with ALOAD myReqIndex, ALOAD 2 with ALOAD myRespIndex
+        // We only do this after the wrapper creation, up to the first instruction of the original method body
         AbstractInsnNode insn = instructions.getFirst();
+        // Skip wrapper creation code we just added
+        while (insn != null && !(insn instanceof LabelNode)) {
+             insn = insn.getNext();
+        }
+
         while (insn != null) {
             if (insn instanceof VarInsnNode) {
                 VarInsnNode varInsn = (VarInsnNode) insn;
                 if (varInsn.getOpcode() == Opcodes.ALOAD) {
                     if (varInsn.var == 1) {
-                        varInsn.var = myReqIndex;
+                        instructions.set(insn, new VarInsnNode(Opcodes.ALOAD, myReqIndex));
                     } else if (varInsn.var == 2) {
-                        varInsn.var = myRespIndex;
+                        instructions.set(insn, new VarInsnNode(Opcodes.ALOAD, myRespIndex));
                     }
                 }
             }
