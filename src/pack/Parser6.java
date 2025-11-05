@@ -464,12 +464,15 @@ if (op == Opcodes.CHECKCAST && inst1.desc.equals("[B")) {
                 } else {
                     String newowner = classTranslation.get(methowner);
                     if (newowner != null) {
-                        // The owner class is one we have wrapped (e.g., ServletOutputStream).
-                        // We retarget the method call to our wrapper class (e.g., MyServletOutputStream).
-                        // The method signature has already been parsed by parseMethodDesc to use
-                        // our ODB types (e.g., Pair instead of byte[]).
                         methodinst.owner = newowner;
                         methodinst.desc = newdesc;
+                        // If the original call was on an interface, we must change the opcode
+                        // to INVOKEVIRTUAL since our wrapper is a class.
+                        if (op == Opcodes.INVOKEINTERFACE) {
+                             MethodInsnNode newinst = new MethodInsnNode(Opcodes.INVOKEVIRTUAL, newowner, methodinst.name, newdesc, false);
+                             m.instructions.set(inst, newinst);
+                             inst = newinst;
+                        }
                         outside = false;
                     }
                 }
